@@ -5,7 +5,7 @@ VisualStudioVersion = 16.0.31129.286
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CreditCardApplications", "CreditCardApplications\CreditCardApplications.csproj", "{4DBC2448-2B42-4466-B357-AFC0259F370D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CreditCardApplications.Tests", "CreditCardApplications.Tests\CreditCardApplications.Tests.csproj", "{79F7C09C-5941-478A-94A5-BF5CF1D43BA6}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CreditCardApplications.Tests", "CreditCardApplications.Tests\CreditCardApplications.Tests.csproj", "{79F7C09C-5941-478A-94A5-BF5CF1D43BA6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

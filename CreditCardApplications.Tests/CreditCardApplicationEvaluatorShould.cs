@@ -1,19 +1,30 @@
 using System;
 using Xunit;
 using Moq;
+using System.Collections.Generic;
+using Moq.Protected;
 
 namespace CreditCardApplications.Tests
 {
     public class CreditCardApplicationEvaluatorShould
     {
+        private Mock<IFrequentFlyerNumberValidator> mockValidator;
+        private CreditCardApplicationEvaluator sut;
+
+        public CreditCardApplicationEvaluatorShould()
+        {
+            mockValidator = new Mock<IFrequentFlyerNumberValidator>();
+            mockValidator.SetupAllProperties();
+            mockValidator.Setup(x => x.ServiceInformation.License.LicenseKey).Returns("OK");
+            mockValidator.Setup(x => x.IsValid(It.IsAny<string>())).Returns(true);
+
+            sut = new CreditCardApplicationEvaluator(mockValidator.Object);
+        }
+
         // ***************** Configuring Mocked Methods - Start **********************
         [Fact]
         public void AcceptHighIncomeApplications()
         {
-            Mock<IFrequentFlyerNumberValidator> mockValidator =
-                new Mock<IFrequentFlyerNumberValidator>();
-
-            var sut = new CreditCardApplicationEvaluator(mockValidator.Object);
 
             var application = new CreditCardApplication { GrossAnnualIncome = 100_000 };
 
@@ -25,14 +36,10 @@ namespace CreditCardApplications.Tests
         [Fact]
         public void ReferYoungApplications()
         {
-            var mockValidator =
-                    new Mock<IFrequentFlyerNumberValidator>();
+
             // setting up default should be done carefully, as it can hide issues
             // setting this up will allow default values instead of null reference of an object
             mockValidator.DefaultValue = DefaultValue.Mock;
-
-            mockValidator.Setup(x => x.IsValid(It.IsAny<string>())).Returns(true);
-            var sut = new CreditCardApplicationEvaluator(mockValidator.Object);
 
             var application = new CreditCardApplication { Age = 19 };
 
@@ -44,9 +51,6 @@ namespace CreditCardApplications.Tests
         [Fact]
         public void DeclineLowIncomeApplications()
         {
-            Mock<IFrequentFlyerNumberValidator> mockValidator =
-                    new Mock<IFrequentFlyerNumberValidator>();
-            mockValidator.Setup(x => x.ServiceInformation.License.LicenseKey).Returns("OK");
             // mockValidator.Setup(x => x.IsValid("x")).Returns(true); // - for specific argument matching
 
             // mockValidator.Setup(x => x.IsValid(It.IsAny<string>())).Returns(true); // generic argument matching
@@ -75,9 +79,6 @@ namespace CreditCardApplications.Tests
                 x => x.IsValid(It.IsRegex("[a-z]{1}")))
                 .Returns(true);
 
-
-
-            var sut = new CreditCardApplicationEvaluator(mockValidator.Object);
 
             var application = new CreditCardApplication 
             { 
@@ -350,6 +351,233 @@ namespace CreditCardApplications.Tests
             /*mockValidator.VerifyNoOtherCalls();*/ // only true if you have verified all the other calls in the code flow
         }
 
-        // ***************** Configuring Mock Behavior Testing - Start **********************
+        // ***************** Configuring Mock Behavior Testing - End **********************
+
+        // ***************** Throwing Exceptions from Mocked Objects - Start **********************
+
+        [Fact]
+        public void ReferWhenFrequentFlyerValidationError()
+        {
+            var mockValidator = new Mock<IFrequentFlyerNumberValidator>();
+
+            mockValidator.Setup(x => x.ServiceInformation.License.LicenseKey).Returns("OK");
+            // mockValidator.Setup(x => x.IsValid(It.IsAny<string>())).Throws<Exception>();
+            mockValidator
+                .Setup(x => x.IsValid(It.IsAny<string>()))
+                .Throws(new Exception("Custom Message"));  // throws exception with custom message
+
+            var sut = new CreditCardApplicationEvaluator(mockValidator.Object);
+            var application = new CreditCardApplication
+            {
+                Age = 42
+            };
+
+            CreditCardApplicationDecision decision = sut.Evaluate(application);
+
+            Assert.Equal(CreditCardApplicationDecision.ReferredToHuman, decision);
+
+        }
+
+        // ***************** Throwing Exceptions from Mocked Objects - End ************************
+
+        // ***************** Raising Events from Mocked Objects - Start **********************
+
+        [Fact]
+        public void IncrementLookupCount()
+        {
+            var mockValidator = new Mock<IFrequentFlyerNumberValidator>();
+
+            mockValidator.Setup(x => x.ServiceInformation.License.LicenseKey).Returns("OK");
+            mockValidator.Setup(x => x.IsValid(It.IsAny<string>()))
+                .Returns(true)
+                .Raises(x => x.ValidatorLookupPerformed += null, EventArgs.Empty);
+
+
+            var sut = new CreditCardApplicationEvaluator(mockValidator.Object);
+            var application = new CreditCardApplication
+            {
+                FrequentFlyerNumber = "x",
+                Age = 25
+            };
+
+            sut.Evaluate(application);
+
+            //mockValidator.Raise(x => x.ValidatorLookupPerformed += null, EventArgs.Empty);
+            Assert.Equal(1, sut.ValidatorLookupCount);
+
+        }
+
+        // ***************** Raising Events from Mocked Objects - End ***********************
+
+        // ***************** Returning different results from sequential calls - Start **********************
+
+        [Fact]
+        public void ReferInvalidFrequentFlyerApplications_ReturnValuesSequence()
+        {
+            Mock<IFrequentFlyerNumberValidator> mockValidator = new Mock<IFrequentFlyerNumberValidator>();
+
+            mockValidator.Setup(x => x.ServiceInformation.License.LicenseKey).Returns("OK");
+            //mockValidator.Setup(x => x.IsValid(It.IsAny<string>()))
+            //    .Returns(false);
+            mockValidator.SetupSequence(x => x.IsValid(It.IsAny<string>()))
+                .Returns(false)
+                .Returns(true);
+
+
+
+            var sut = new CreditCardApplicationEvaluator(mockValidator.Object);
+            var application = new CreditCardApplication
+            {
+                Age = 25
+            };
+
+            CreditCardApplicationDecision firstDecision = sut.Evaluate(application);
+            Assert.Equal(CreditCardApplicationDecision.ReferredToHuman, firstDecision);
+
+            CreditCardApplicationDecision secondDecision = sut.Evaluate(application);
+            Assert.Equal(CreditCardApplicationDecision.AutoDeclined, secondDecision);
+
+        }
+
+
+        [Fact]
+        public void ReferInvalidFrequentFlyerApplications_MultipleCallsSequence()
+        {
+            Mock<IFrequentFlyerNumberValidator> mockValidator = new Mock<IFrequentFlyerNumberValidator>();
+            mockValidator.Setup(x => x.ServiceInformation.License.LicenseKey).Returns("OK");
+
+            var frequentFlyerNumbersPassed = new List<string>();
+            // capture parameters passed in InvValid() function arguments in the string list
+            mockValidator.Setup(x => x.IsValid(Capture.In(frequentFlyerNumbersPassed)));
+
+            var sut = new CreditCardApplicationEvaluator(mockValidator.Object);
+
+            var application1 = new CreditCardApplication { Age = 25, FrequentFlyerNumber = "aa" };
+            var application2 = new CreditCardApplication { Age = 25, FrequentFlyerNumber = "bb" };
+            var application3 = new CreditCardApplication { Age = 25, FrequentFlyerNumber = "cc" };
+
+            sut.Evaluate(application1);
+            sut.Evaluate(application2);
+            sut.Evaluate(application3);
+
+            // Assert that IsValid method was called three times "aa", "bb", and "cc"
+            Assert.Equal(new List<string> { "aa", "bb", "cc" }, frequentFlyerNumbersPassed);
+        }
+
+        // ***************** Returning different results from sequential calls - End **********************
+
+
+        // ***************** Mocking Members of Concrete types with partial mocks & virtual protected members - Start **********************
+
+        [Fact]
+        public void ReferFraudRisk()
+        {
+            Mock<IFrequentFlyerNumberValidator> mockValidator = new Mock<IFrequentFlyerNumberValidator>();
+            Mock<FraudLookup> mockFraudLookup = new Mock<FraudLookup>();
+            //mockValidator.Setup(x => x.ServiceInformation.License.LicenseKey).Returns("OK");
+
+            // Mocking Concrete type
+            //mockFraudLookup.Setup(x => x.IsFraudRisk(It.IsAny<CreditCardApplication>()))
+            //    .Returns(true);
+
+            // mocking protected virtual method
+            mockFraudLookup.Protected()
+                .Setup<bool>("CheckApplication", ItExpr.IsAny<CreditCardApplication>())
+                .Returns(true);
+
+            var sut = new CreditCardApplicationEvaluator(mockValidator.Object, 
+                mockFraudLookup.Object);
+
+            var application = new CreditCardApplication();
+            CreditCardApplicationDecision decision = sut.Evaluate(application);
+            Assert.Equal(CreditCardApplicationDecision.ReferredToHumanFraudRisk, decision);
+        }
+
+        // ***************** Mocking Members of Concrete types with partial mocks & virtual protected members - End **********************
+
+        // ***************** Improve Mock Setup Readability with Linq top Mocks - Start ***********************
+        [Fact]
+        public void LinqToMocks()
+        {
+            //Mock<IFrequentFlyerNumberValidator> mockValidator =
+            //        new Mock<IFrequentFlyerNumberValidator>();
+            //mockValidator.Setup(x => x.ServiceInformation.License.LicenseKey).Returns("OK");
+            //mockValidator.Setup(x => x.IsValid(It.IsAny<string>())).Returns(true);
+            //var sut = new CreditCardApplicationEvaluator(mockValidator.Object);
+
+            // *** replace fluent style code with LINQ ******
+            IFrequentFlyerNumberValidator mockValidator =
+                Mock.Of<IFrequentFlyerNumberValidator>
+                (
+                    validator =>
+                    validator.ServiceInformation.License.LicenseKey == "OK" &&
+                    validator.IsValid(It.IsAny<string>()) == true
+                );
+            var sut = new CreditCardApplicationEvaluator(mockValidator);
+
+            var application = new CreditCardApplication { Age = 25 };
+
+            CreditCardApplicationDecision decision = sut.Evaluate(application);
+
+            Assert.Equal(CreditCardApplicationDecision.AutoDeclined, decision);
+        }
+
+        // ***************** Improve Mock Setup Readability with Linq top Mocks - End ***********************
     }
 }
+
+
+
+// *********** Matching Generic type Arguments *****************************
+
+//public interface IDemoInterface
+//{
+//    bool IsOdd<T>(T number);
+//}
+
+//var mock = new Mock<IDemoInterface>();
+
+//// Specific Value (Inferred Generic Type)
+
+//mock.Setup(x => x.IsOdd(1)).Returns(true);
+//mock.Object.IsOdd(1); // returns true
+//mock.Object.IsOdd(2); // returns false
+//mock.Object.IsOdd(1.0); // returns false
+
+//// Any Value for a specific Generic Type
+
+//mock.Setup(x => x.IsOdd(It.IsAny<int>())).Returns(true);
+//mock.Object.IsOdd(1); // returns true
+//mock.Object.IsOdd(2); // returns true
+//mock.Object.IsOdd(1.0); // returns false
+
+//// Any Value for a any Generic Type
+
+//mock.Setup(x => x.IsOdd(It.IsAny<It.IsAnyType>())).Returns(true);
+//mock.Object.IsOdd(1); // returns true
+//mock.Object.IsOdd(2); // returns true
+//mock.Object.IsOdd(1.0); // returns true
+//mock.Object.IsOdd("hello"); // returns true
+
+//// Any Generic Type or subtype(derived)
+
+//mock.Setup(x => x.IsOdd(It.IsAny<It.IsSubtype<ApplicationException>>())).Returns(true);
+//mock.Object.IsOdd(new ApplicationException()); // returns true
+//mock.Object.IsOdd(new Exception()); // returns false
+//mock.Object.IsOdd(new WaitHandleCannotBeOpenedException()); // returns true since this class inherits ApplicationException class
+
+
+
+// *********** Mocking Async Method Return Values *****************************
+
+//public interface IDemoInterfaceAsync
+//{
+//    Task StartAsync();
+//    Task<int> StopAsync();
+//}
+
+//var mock = new Mock<IDemoInterfaceAsync>();
+
+//mock.Setup(x => x.StartAsync()).Returns(Task.CompletedTask);
+//mock.Setup(x => x.StopAsync()).Returns(Task.FromResult(42)); or
+//mock.Setup(x => x.StopAsync()).ReturnsAsync(42);

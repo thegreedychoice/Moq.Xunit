@@ -20,5 +20,8 @@ namespace CreditCardApplications
         IServiceInformation ServiceInformation { get; }
 
         ValidationMode ValidationMode { get; set; }
+
+        // this event is raised when frequent flyernumber is validated by calling IsValid() method
+        event EventHandler ValidatorLookupPerformed; 
     }
 }
