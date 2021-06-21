@@ -225,10 +225,131 @@ namespace CreditCardApplications.Tests
 
 
 
-        // ***************** Configuring Mock Function Return Values - Start **********************
+        // ***************** Configuring Mock Behavior Testing - Start **********************
 
+        [Fact]
+        public void ValidateFrequentFlyerNumberForLowIncomeApplications_VerifyMethodCalledWithArgumentNull()
+        {
+            var mockValidator = new Mock<IFrequentFlyerNumberValidator>();
 
+            mockValidator.Setup(x => x.ServiceInformation.License.LicenseKey).Returns("OK");
 
-        // ***************** Configuring Mock Function Return Values - End **********************
+            var sut = new CreditCardApplicationEvaluator(mockValidator.Object);
+            var application = new CreditCardApplication();
+
+            sut.Evaluate(application);
+
+            // verify if the mocked object method IsValid(null) for SUT is called
+            mockValidator.Verify(x => x.IsValid(null));
+        }
+
+        [Fact]
+        public void ValidateFrequentFlyerNumberForLowIncomeApplications_VerifyMethodCalled()
+        {
+            var mockValidator = new Mock<IFrequentFlyerNumberValidator>();
+
+            mockValidator.Setup(x => x.ServiceInformation.License.LicenseKey).Returns("OK");
+
+            var sut = new CreditCardApplicationEvaluator(mockValidator.Object);
+            var application = new CreditCardApplication
+            {
+                FrequentFlyerNumber = "q"
+            };
+
+            sut.Evaluate(application);
+
+            // verify if the mocked object method IsValid(null) for SUT is called
+            //mockValidator.Verify(x => x.IsValid("q"));
+            //mockValidator.Verify(x => x.IsValid(It.IsAny<string>()));
+
+            // adding a custom error message 
+            mockValidator.Verify(x => x.IsValid(It.IsAny<string>()), "Frequent flyer number should be validated");
+        }
+
+        [Fact]
+        public void NotValidateFrequentFlyerNumberForHighIncomeApplications_VerifyMethodNotCalled()
+        {
+            var mockValidator = new Mock<IFrequentFlyerNumberValidator>();
+
+            mockValidator.Setup(x => x.ServiceInformation.License.LicenseKey).Returns("OK");
+
+            var sut = new CreditCardApplicationEvaluator(mockValidator.Object);
+            var application = new CreditCardApplication
+            {
+                GrossAnnualIncome = 100_000
+            };
+
+            sut.Evaluate(application);
+
+            // verify the method was not called
+            mockValidator.Verify(x => x.IsValid(It.IsAny<string>()), Times.Never);
+        }
+
+        [Fact]
+        public void ValidateFrequentFlyerNumberForLowIncomeApplications_VerifyMethodCalledSpecificNoTimes()
+        {
+            var mockValidator = new Mock<IFrequentFlyerNumberValidator>();
+
+            mockValidator.Setup(x => x.ServiceInformation.License.LicenseKey).Returns("OK");
+
+            var sut = new CreditCardApplicationEvaluator(mockValidator.Object);
+            var application = new CreditCardApplication
+            {
+                FrequentFlyerNumber = "q"
+            };
+
+            sut.Evaluate(application);
+
+            // verify the method was not called
+            //mockValidator.Verify(x => x.IsValid(It.IsAny<string>()), Times.Exactly(2));
+            mockValidator.Verify(x => x.IsValid(It.IsAny<string>()), Times.Once);
+        }
+
+        [Fact]
+        public void CheckLicenseKeyForLowIncomeApplications_VerifyGetProperty()
+        {
+            var mockValidator = new Mock<IFrequentFlyerNumberValidator>();
+
+            mockValidator.Setup(x => x.ServiceInformation.License.LicenseKey).Returns("OK");
+
+            var sut = new CreditCardApplicationEvaluator(mockValidator.Object);
+            var application = new CreditCardApplication
+            {
+                GrossAnnualIncome = 99_000
+            };
+
+            sut.Evaluate(application);
+
+            // verify the LicenseKey property was accessed/get
+            // mockValidator.VerifyGet(x => x.ServiceInformation.License.LicenseKey, Times.Never);
+            mockValidator.VerifyGet(x => x.ServiceInformation.License.LicenseKey);
+        }
+
+        [Fact]
+        public void SetDetailedLookupForOldApllications_VerifySetProperty()
+        {
+            var mockValidator = new Mock<IFrequentFlyerNumberValidator>();
+
+            mockValidator.Setup(x => x.ServiceInformation.License.LicenseKey).Returns("OK");
+
+            var sut = new CreditCardApplicationEvaluator(mockValidator.Object);
+            var application = new CreditCardApplication
+            {
+                Age = 30
+            };
+
+            sut.Evaluate(application);
+
+            // verify the LicenseKey property was accessed/get
+            // mockValidator.VerifyGet(x => x.ServiceInformation.License.LicenseKey, Times.Never);
+            // mockValidator.VerifySet(x => x.ValidationMode = ValidationMode.Detailed);
+            mockValidator.VerifySet(x => x.ValidationMode = It.IsAny<ValidationMode>(), Times.Once); // if set to any validationmode value
+
+            // verify no other calls on mocked object
+            //mockValidator.Verify(x => x.IsValid(null), Times.Once);
+            /*mockValidator.VerifyNoOtherCalls();*/ // only true if you have verified all the other calls in the code flow
+        }
+
+        // ***************** Configuring Mock Behavior Testing - Start **********************
     }
 }
